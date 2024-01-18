@@ -1,7 +1,6 @@
 import json, webbrowser
 import requests as r
 from requests_oauthlib import OAuth2Session
-global keepActive
 
 CLIENT_ID = "id"
 CLIENT_SECRET = "secret"
@@ -213,8 +212,6 @@ def command(argument):
         case __:
             return 0
   
-
-
 with open("./token.json", "r+") as f:
 
     token = json.load(f)['token']
@@ -250,8 +247,6 @@ with open("./token.json", "r+") as f:
 headers = get_auth_header(token)
 state = playback_state()
 being_played(state)
-
-#shuffle_playback(True)
 
 keepActive = 1
 while (keepActive == 1):
