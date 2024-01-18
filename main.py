@@ -1,24 +1,40 @@
 import json, webbrowser
 import requests as r
 from requests_oauthlib import OAuth2Session
+global keepActive
 
-CLIENT_ID = "client_id"
-CLIENT_SECRET = "client_secret"
+CLIENT_ID = "id"
+CLIENT_SECRET = "secret"
 REDIRECT_URI = "https://localhost:8888/callback"
 
+AUTH_URL = "https://accounts.spotify.com/authorize?"
+TOKEN_URL = "https://accounts.spotify.com/api/token"
+
+
 def get_auth():
-    auth_url = "https://accounts.spotify.com/authorize?"
-    token_url = "https://accounts.spotify.com/api/token"
+
     scope = ["streaming", "app-remote-control", "user-read-playback-state", "user-read-currently-playing", "user-modify-playback-state"]
     spotify = OAuth2Session(CLIENT_ID, scope=scope, redirect_uri=REDIRECT_URI)
-    authorization_url, state = spotify.authorization_url(auth_url)
+    authorization_url, state = spotify.authorization_url(AUTH_URL)
     webbrowser.open(authorization_url)
     #print('Access: ', authorization_url)
 
     redirect_response = input("Paste URL: ")
 
     auth = r.auth.HTTPBasicAuth(CLIENT_ID, CLIENT_SECRET)
-    token = spotify.fetch_token(token_url, auth=auth, authorization_response=redirect_response)
+    token = spotify.fetch_token(TOKEN_URL, auth=auth, authorization_response=redirect_response)
+    return token["access_token"]
+
+def renew_auth():
+    scope = ["streaming", "app-remote-control", "user-read-playback-state", "user-read-currently-playing", "user-modify-playback-state"]
+    spotify = OAuth2Session(CLIENT_ID, scope=scope, redirect_uri=REDIRECT_URI)
+    authorization_url, state = spotify.authorization_url(AUTH_URL)
+    #print('Access: ', authorization_url)
+
+    redirect_response = r.get('https://youtu.be/dQw4w9WgXcQ')
+
+    auth = r.auth.HTTPBasicAuth(CLIENT_ID, CLIENT_SECRET)
+    token = spotify.fetch_token(TOKEN_URL, auth=auth, authorization_response=redirect_response)
     return token["access_token"]
 
 def get_auth_header(token):
@@ -55,7 +71,7 @@ def playback_state():
 def being_played(playback_state):
     playback_state_device = playback_state['device']
     playback_state_track = playback_state['item']
-    if playback_state["is_playing"] == True:
+    if playback_state["is_playing"] == True and playback_state_device["is_active"] == True:
         print(f"\nPlaing in {playback_state_device['name']}      Volume: {playback_state_device['volume_percent']}\nTrack: {playback_state_track['name']}")
         print("Musicians: ",end="")
         for i in range(len(playback_state_track['artists'])):
@@ -70,6 +86,9 @@ def choose_available_device():
     url = "https://api.spotify.com/v1/me/player/devices"
     result = r.get(url, headers=headers)
     json_result = json.loads(result.content)['devices']
+    if len(json_result) == 1:
+        print(f"Only one device available - {json_result[0]['name']} - {json_result[0]['type']}")
+        return 0
     print("Available Devices:")
     for i in range(len(json_result)):
         print(f"{i+1}. {json_result[i]['name']} - {json_result[i]['type']}")
@@ -78,7 +97,9 @@ def choose_available_device():
     return device_id
 
 def change_device():
-    transfer_playback(choose_available_device())
+    change = choose_available_device()
+    if change != 0:
+        transfer_playback(change)
     start_resume_playback()
 #-----------------------------------------------
 
@@ -153,8 +174,48 @@ def queue_playback():
 #artist_result = search_artist(token, "potsu")
 #artist_id = artist_result["id"]
 
+def command(argument):
+    match argument:
+        case 1:
+            prev_playback()
+            return 1
+        case 2:
+            if state["is_playing"] == True:
+                pause_playback()
+                return 1
+            
+            else:
+                start_resume_playback()
+                return 1
+            
+        case 3:
+            next_playback()
+            return 1
+        case 4:
+            queue_playback()
+            return 1
+        case 5:
+            value = int(input("Desired Volume:"))
+            volume_playback(value)
+            return 1
+        case 6:
+            change_device()
+            return 1
+        case 7:
+            if state["shuffle_state"] == True:
+                shuffle_playback(False)
+                queue_playback()
+                return 1
+            else: 
+                shuffle_playback(True)
+                queue_playback()
+                return 1
+        case __:
+            return 0
+  
 
-with open("spotify api/token.json", "r+") as f:
+
+with open("./token.json", "r+") as f:
 
     token = json.load(f)['token']
     headers = get_auth_header(token)
@@ -177,7 +238,7 @@ with open("spotify api/token.json", "r+") as f:
             start_resume_playback()
         
     elif (state == 1):
-        new_token = get_auth()
+        new_token = renew_auth()
         if token != new_token:
             token = new_token
             json_token = {"token" : token}
@@ -188,14 +249,20 @@ with open("spotify api/token.json", "r+") as f:
 
 headers = get_auth_header(token)
 state = playback_state()
-#queue_playback()
-#change_device()
-#start_resume_playback()
-#pause_playback()
-#next_playback()
-#prev_playback()
-#volume_playback(25)
-#shuffle_playback(True)
 being_played(state)
 
+#shuffle_playback(True)
 
+keepActive = 1
+while (keepActive == 1):
+    print("\nEnter the number of the desired option:")
+    try:
+        arg = int(input(f"1.Previous  | 2.Pause/Continue | 3.Next \n4.Get Queue | 5.Change Volume  | 6.Device\n7.Shuffle On: {state['shuffle_state']}\nEnter anything else to exit:\n> "))
+    except ValueError:
+        keepActive = 0
+    try:
+        keepActiver = command(arg)
+    except NameError:
+        keepActive = 0
+    arg = 0
+    state = playback_state()
