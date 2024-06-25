@@ -1,0 +1,1 @@
+Code that uses the Spotify API to access and control the user playback (stopping, playing, changing volume, skipping, ...)
